@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 from pathlib import Path
+from openpyxl import load_workbook
 
 # ❓ Pergunta ao usuário
 resposta = input("Deseja remover parcelas liquidadas? (s/n): ").strip().lower()
@@ -18,8 +19,10 @@ cabecalho_calculado = [
     "Valor Presente", "Qtd Parcelas", "Taxa"
 ]
 
-# Processa cada .csv
-for entrada in pasta_csv.glob("*.csv"):
+# Processa .csv e .xlsx
+for entrada in pasta_csv.iterdir():
+    if entrada.suffix.lower() not in [".csv", ".xlsx", ".xlsm"]:
+        continue
     saida = saida_pasta / f"{entrada.stem}_PROCESSADO.csv"
 
     pessoas = []
@@ -27,8 +30,16 @@ for entrada in pasta_csv.glob("*.csv"):
     current_pessoa = None
     current_parcelas = []
 
-    with open(entrada, "r", encoding="latin1") as f:
-        linhas = f.readlines()
+    if entrada.suffix.lower() == ".csv":
+        with open(entrada, "r", encoding="latin1") as f:
+            linhas = f.readlines()
+    else:
+        wb = load_workbook(entrada, data_only=True)
+        ws = wb.active
+        linhas = [
+            ";".join("" if c is None else str(c) for c in row)
+            for row in ws.iter_rows(values_only=True)
+        ]
 
     if not linhas:
         continue
@@ -76,7 +87,8 @@ for entrada in pasta_csv.glob("*.csv"):
 
         try:
             df[16] = df[16].str.replace(',', '.', regex=False).astype(float)
-            df_abertas = df[df[16] > 0].copy()
+            # Inclui parcelas com saldo 0 para evitar taxa negativa
+            df_abertas = df[df[16] >= 0].copy()
             if df_abertas.empty:
                 raise ValueError("Nenhuma parcela aberta válida")
 
